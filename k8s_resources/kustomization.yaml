@@ -1,0 +1,21 @@
+resources:
+- rabbitmq-deployment.yaml
+- rabbitmq-service.yaml
+- chris-store-db-deployment.yaml
+- chris-store-db-service.yaml
+- chris-db-deployment.yaml
+- chris-db-service.yaml
+- chris-store-deployment.yaml
+- chris-store-service.yaml
+- chris-deployment.yaml
+- chris-service.yaml
+- worker-deployment.yaml
+- worker-service.yaml
+- swift-deployment.yaml
+- swift-service.yaml
+- pfcon-deployment.yaml
+- pfcon-service.yaml
+- pfioh-deployment.yaml
+- pfioh-service.yaml
+- pman-deployment.yaml
+- pman-service.yaml

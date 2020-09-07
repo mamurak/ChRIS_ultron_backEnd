@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chris
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: chris
+  template:
+    metadata:
+      labels:
+        name: chris
+    spec:
+      containers:
+      - name: chris
+        image: fnndsc/chris
+        ports:
+        - containerPort: 8000
+        env:
+        - name: CHRIS_DEBUG_QUIET

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chris-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: chris-store
+  template:
+    metadata:
+      labels:
+        name: chris-store
+    spec:
+      containers:
+      - name: chris-store
+        image: fnndsc/chris_store
+        ports:
+        - containerPort: 8010
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "config.settings.production"
+        - name: DJANGO_ALLOWED_HOSTS
+          value: "*"
+        - name: DJANGO_SECRET_KEY
+          value: "w1kxu^l=@pnsf!5piqz6!!5kdcdpo79y6jebbp+2244yjm*#+k"
+        - name: DJANGO_CORS_ORIGIN_ALLOW_ALL
+          value: "true"
+        - name: DJANGO_CORS_ORIGIN_WHITELIST
+          value: "babymri.org"
+        - name: DATABASE_HOST
+          value: chris_store_db
+        - name: DATABASE_PORT
+          value: "3306"
+        - name: SWIFT_AUTH_URL
+          value: "http://swift_service:8080/auth/v1.0"
+        - name: MYSQL_ROOT_PASSWORD
+          value: rootp
+        - name: MYSQL_DATABASE
+          value: chris_store
+        - name: MYSQL_USER
+          value: chris
+        - name: MYSQL_PASSWORD
+          value: Chris1234
+        - name: SWIFT_USERNAME
+          value: "chris:chris1234"
+        - name: SWIFT_KEY
+          value: testing
+        - name: SWIFT_CONTAINER_NAME
+          value: store_users

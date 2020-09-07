@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swift
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: swift
+  template:
+    metadata:
+      labels:
+        name: swift
+    spec:
+      containers:
+      - name: swift
+        image: fnndsc/docker-swift-onlyone
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SWIFT_USERNAME
+          value: "chris:chris1234"
+        - name: SWIFT_KEY
+          value: "testing"
