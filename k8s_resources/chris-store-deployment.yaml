@@ -29,11 +29,11 @@ spec:
         - name: DJANGO_CORS_ORIGIN_WHITELIST
           value: "babymri.org"
         - name: DATABASE_HOST
-          value: chris_store_db
+          value: chris-store-db
         - name: DATABASE_PORT
           value: "3306"
         - name: SWIFT_AUTH_URL
-          value: "http://swift_service:8080/auth/v1.0"
+          value: "http://swift:8080/auth/v1.0"
         - name: MYSQL_ROOT_PASSWORD
           value: rootp
         - name: MYSQL_DATABASE
