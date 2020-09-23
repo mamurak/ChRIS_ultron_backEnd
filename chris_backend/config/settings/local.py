@@ -73,7 +73,7 @@ for app in ['collectionjson', 'core', 'feeds', 'plugins', 'plugininstances', 'pi
 
 # Swift service settings
 DEFAULT_FILE_STORAGE = 'swift.storage.SwiftStorage'
-SWIFT_AUTH_URL = 'http://swift_service:8080/auth/v1.0'
+SWIFT_AUTH_URL = 'http://swift:8080/auth/v1.0'
 SWIFT_USERNAME = 'chris:chris1234'
 SWIFT_KEY = 'testing'
 SWIFT_CONTAINER_NAME = 'users'
@@ -105,27 +105,27 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # django-debug-toolbar
 # ------------------------------------------------------------------------------
-MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
-INSTALLED_APPS += ['debug_toolbar']
+# MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
+# INSTALLED_APPS += ['debug_toolbar']
 
-INTERNAL_IPS = ['127.0.0.1',]
+# INTERNAL_IPS = ['127.0.0.1',]
 
-DEBUG_TOOLBAR_CONFIG = {
-    'DISABLE_PANELS': [
-        'debug_toolbar.panels.redirects.RedirectsPanel',
-    ],
-    'SHOW_TEMPLATE_CONTEXT': True,
-}
+# DEBUG_TOOLBAR_CONFIG = {
+#     'DISABLE_PANELS': [
+#         'debug_toolbar.panels.redirects.RedirectsPanel',
+#     ],
+#     'SHOW_TEMPLATE_CONTEXT': True,
+# }
 
 # django-extensions
 # ------------------------------------------------------------------------------
-INSTALLED_APPS += ['django_extensions']
+# INSTALLED_APPS += ['django_extensions']
 
 # TESTING
 # ------------------------------------------------------------------------------
-TEST_RUNNER = 'django.test.runner.DiscoverRunner'
+# TEST_RUNNER = 'django.test.runner.DiscoverRunner'
 
-COMPUTE_RESOURCE_URL = 'http://pfcon.local:5005'
+COMPUTE_RESOURCE_URL = 'http://pfcon:5005'
 
 # corsheaders
 # ------------------------------------------------------------------------------
@@ -136,9 +136,9 @@ CORS_EXPOSE_HEADERS = ['Allow', 'Content-Type', 'Content-Length']
 # Celery settings
 
 # Testing (enable worker to use the temporary Django testing DB)
-INSTALLED_APPS += ['celery.contrib.testing.tasks', 'django_celery_results']
-CELERY_RESULT_BACKEND = 'django-db'  # a result backend is needed for tests
-CELERY_RESULT_SERIALIZER = 'json'
+# INSTALLED_APPS += ['celery.contrib.testing.tasks', 'django_celery_results']
+# CELERY_RESULT_BACKEND = 'django-db'  # a result backend is needed for tests
+# CELERY_RESULT_SERIALIZER = 'json'
 
 #CELERY_BROKER_URL = 'amqp://guest:guest@localhost'
 CELERY_BROKER_URL = 'amqp://queue:5672'

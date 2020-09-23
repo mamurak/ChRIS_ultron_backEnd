@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: fnndsc/chris
+        image: mmurakam/chris:3 #fnndsc/chris
         ports:
         - containerPort: 6900
         env:
