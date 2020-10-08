@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: swift
-        image: fnndsc/docker-swift-onlyone
+        image: fnndsc/docker-swift-onlyone:latest
         ports:
         - containerPort: 8080
         env:

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: pfcon
-        image: fnndsc/pfcon
+        image: mmurakam/pfcon:2 #fnndsc/pfcon:latest
         ports:
         - containerPort: 5005
         args: ["--forever", "--httpResponse", "--verbosity", "1"]

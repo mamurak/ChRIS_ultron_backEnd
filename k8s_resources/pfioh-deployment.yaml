@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: pfioh
-        image: fnndsc/pfioh
+        image: fnndsc/pfioh:latest
         ports:
         - containerPort: 5055
         args: ["--forever", "--httpResponse", "--createDirsAsNeeded", "--storeBase", "/hostFS/storeBase", "--verbosity", "1"]

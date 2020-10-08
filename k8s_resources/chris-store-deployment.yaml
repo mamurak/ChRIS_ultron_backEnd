@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: chris-store
-        image: fnndsc/chris_store
+        image: fnndsc/chris_store:latest
         ports:
         - containerPort: 8010
         env:
