@@ -8,7 +8,7 @@
 #
 #   make.sh                     [-r <service>]                  \
 #                               [-a <swarm-advertise-adr>]      \
-#                               [-p] [-s] [-i]                  \
+#                               [-p] [-s] [-i] [-d]             \
 #                               [-U] [-I]                       \
 #                               [-S <storeBaseOverride>]        \
 #                               [-e <computeEnv>]               \
@@ -19,8 +19,10 @@
 #   'make.sh' is the main entry point for instantiating a
 #   complete backend dev environment.
 #
-#   It creates a pattern of directories and symbolic links that reflect the
-#   declarative environment of the docker-compose_dev.yml contents.
+#   Using appropriate flags, this script can restart services
+#   in interactive mode, toggle unit/integration testing on or
+#   off, pause at a specified wait point, and even skip various
+#   introductory / informational steps.
 #
 # TYPICAL CASES:
 #
@@ -32,6 +34,19 @@
 #
 #       ./unmake.sh ; sudo rm -fr FS; rm -fr FS; ./make.sh -U -I -s
 #
+#   NOTE: What's up with the "sudo rm..." followed by "rm ..."?
+#
+#         This is a rather unintuitive work around if ChRIS is being
+#         instantiated on a NFS mounted volume (with the `rootsquash`
+#         set). Files down directory trees created by running ChRIS
+#         dockerized services might have mixed ownership and trying
+#         to delete these files as `root` on the host running the
+#         service might not remove files owned by a different user.
+#
+#         Hence this rather counter-intuitive construct where sometimes
+#         being `root` is not sufficient in deleting leftover files or
+#         directories.
+##
 # ARGS
 #
 #   -U
@@ -186,32 +201,37 @@ title -d 1 "Setting global exports..."
 windowBottom
 
 if (( b_restart )) ; then
-    title -d 1 "Restarting ${RESTART} service"                          \
+    title -d 1 "Restarting ${RESTART}"                                  \
                     "in interactive mode..."
     printf "${LightCyan}%40s${LightGreen}%40s\n"                        \
-                "Stopping" "${RESTART}_service"                         | ./boxes.sh
+                "Stopping" "${RESTART}"                                 | ./boxes.sh
     windowBottom
 
-    docker-compose --no-ansi -f docker-compose_dev.yml stop ${RESTART}_service >& dc.out > /dev/null
+    docker-compose --no-ansi -f docker-compose_dev.yml stop ${RESTART}  >& dc.out > /dev/null
     echo -en "\033[2A\033[2K"
     cat dc.out | ./boxes.sh
 
     printf "${LightCyan}%40s${LightGreen}%40s\n"                        \
-                "rm -f" "${RESTART}_service"                            | ./boxes.sh
+                "rm -f" "${RESTART}"                                    | ./boxes.sh
     windowBottom
 
-    docker-compose --no-ansi -f docker-compose_dev.yml rm -f ${RESTART}_service >& dc.out > /dev/null
+    docker-compose --no-ansi -f docker-compose_dev.yml rm -f ${RESTART} >& dc.out > /dev/null
     echo -en "\033[2A\033[2K"
     cat dc.out | ./boxes.sh
     windowBottom
 
-    docker-compose -f docker-compose_dev.yml run --service-ports        \
-        ${RESTART}_service
+    docker-compose -f docker-compose_dev.yml run --use-aliases --service-ports        \
+        ${RESTART}
 else
     title -d 1 "Pulling non-'local/' core containers where needed..."   \
                 "and creating appropriate .env for docker-compose"
-    docker pull mysql:5         | ./boxes.sh
-    docker pull rabbitmq:3      | ./boxes.sh
+    printf "${LightCyan}%40s${Green}%-40s${Yellow}\n"                   \
+                "docker pull" " library/mysql"                          | ./boxes.sh
+    docker pull mysql:5                                                 | ./boxes.sh
+    echo ""                                                             | ./boxes.sh
+    printf "${LightCyan}%40s${Green}%-40s${Yellow}\n"                   \
+                "docker pull " "library/rabbitmq"                       | ./boxes.sh
+    docker pull rabbitmq:3                                              | ./boxes.sh
     if (( ! b_skipIntro )) ; then
         echo "# Variables declared here are available to"               > .env
         echo "# docker-compose on execution"                            >>.env
@@ -221,8 +241,8 @@ else
             if [[ $REPO != "local" ]] ; then
                 echo ""                                                 | ./boxes.sh
                 CMD="docker pull ${REPO}/$CONTAINER"
-                printf "${LightCyan}%-40s${Green}%40s${Yellow}\n"       \
-                            "docker pull" "${REPO}/$CONTAINER"          | ./boxes.sh
+                printf "${LightCyan}%40s${Green}%-40s${Yellow}\n"       \
+                            "docker pull" " ${REPO}/$CONTAINER"         | ./boxes.sh
                 windowBottom
                 sleep 1
                 echo $CMD | sh                                          | ./boxes.sh -c
@@ -246,8 +266,8 @@ else
                 CMD="docker run ${REPO}/$CONTAINER --version"
                 Ver=$(echo $CMD | sh | grep Version)
                 echo -en "\033[2A\033[2K"
-                printf "${White}%40s${Green}%40s${Yellow}\n"            \
-                        "${REPO}/$CONTAINER" "$Ver"                     | ./boxes.sh
+                printf "${White}%40s${Green}%-40s${Yellow}\n"            \
+                        "${REPO}/$CONTAINER" " $Ver"                     | ./boxes.sh
             fi
         done
         # Determine the versions of pfurl *inside* pfcon and chris:dev
@@ -255,14 +275,14 @@ else
         CMD="docker run --entrypoint /usr/local/bin/pfurl ${PFCONREPO}/pfcon${TAG} --version"
         Ver=$(echo $CMD | sh | grep Version)
         echo -en "\033[2A\033[2K"
-        printf "${White}%40s${Green}%40s${Yellow}\n"                    \
-                    "pfurl inside ${PFCONREPO}/pfcon${TAG}" "$Ver"      | ./boxes.sh
+        printf "${White}%40s${Green}%-40s${Yellow}\n"                   \
+                    "pfurl inside ${PFCONREPO}/pfcon${TAG}" " $Ver"     | ./boxes.sh
         windowBottom
         CMD="docker run --entrypoint /usr/local/bin/pfurl ${CHRISREPO}/chris:dev --version"
         Ver=$(echo $CMD | sh | grep Version)
         echo -en "\033[2A\033[2K"
-        printf "${White}%40s${Green}%40s${Yellow}\n"                    \
-                    "pfurl inside ${CHRISREPO}/CUBE" "$Ver"             | ./boxes.sh
+        printf "${White}%40s${Green}%-40s${Yellow}\n"                   \
+                    "pfurl inside ${CHRISREPO}/CUBE" " $Ver"            | ./boxes.sh
         windowBottom
     fi
 
@@ -289,13 +309,15 @@ else
         cat dc.out | sed -E 's/(.{80})/\1\n/g'                                  | ./boxes.sh ${LightCyan}
         for CORE in ${A_CONTAINER[@]} ; do
             cparse $CORE " " "REPO" "CONTAINER" "MMN" "ENV"
+            printf "${White}%40s${Green}%40s${NC}\n"                            \
+                        "$CONTAINER" "stopping..."                              | ./boxes.sh
             docker ps -a                                                        |\
                 grep $CONTAINER                                                 |\
                 awk '{printf("docker stop %s && docker rm -vf %s\n", $1, $1);}' |\
                 sh >/dev/null                                                   | ./boxes.sh
-            printf "${White}%40s${Green}%40s${NC}\n"                            \
-                        "$CONTAINER" "stopped"                                  | ./boxes.sh
+            # echo -en "\033[2A\033[2K"
         done
+        echo "All containers stopped."                                          | ./boxes.sh
     windowBottom
 
     title -d 1 "Changing permissions to 755 on" "$(pwd)"
@@ -342,14 +364,35 @@ else
         cat dc.out | sed -E 's/(.{80})/\1\n/g'                          | ./boxes.sh ${LightGreen}
     windowBottom
 
-    title -d 1 "Pause for manual restart of services?"
+    title -d 1  "Pause for manual restart of services?"                         \
+                "Restarting services here allows for real time logging of integration tests"
     if (( b_pause )) ; then
-        echo "Pausing... hit *ANY* key to continue"                     | ./boxes.sh
+        boxcenter "Note manual restart is OPTIONAL!"                        ${Yellow}
+        boxcenter ""
+        boxcenter "If you don't want to enable better realtime logging,"
+        boxcenter "simply ignore this and hit *ANY* key to  continue..."
+        boxcenter ""
+        boxcenter "To log the 'worker' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r worker"                                  ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pfcon' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pfcon_service"                           ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pfioh' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pfioh_service"                           ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pman' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pman_service"                            ${LightCyan}
+        boxcenter ""
+        boxcenter "NOTE: Restart services in this order:"                   ${LightGreen}
+        boxcenter "worker, pfcon, pfioh, pman"                              ${LightGreen}
+        boxcenter ""
+        boxcenter "Pausing... hit *ANY* key to continue"                    ${Yellow}
         windowBottom
         old_stty_cfg=$(stty -g)
         stty raw -echo ; REPLY=$(head -c 1) ; stty $old_stty_cfg
         echo -en "\033[2A\033[2K"
-        echo "Resuming..."                                              | ./boxes.sh
+        boxcenter "Resuming..."
     fi
     windowBottom
 
@@ -413,11 +456,8 @@ else
         if (( $status == 0 )) ; then
             printf "%40s${LightGreen}%40s${NC}\n"                       \
                 "CUBE Integration tests" "[ success ]"                  | ./boxes.sh
-            echo ""                                                     | ./boxes.sh
-            printf "%80s\n" "Clearing internal pman database..."        | ./boxes.sh
-            windowBottom
-            docker-compose --no-ansi -f docker-compose_dev.yml          \
-                exec pman_service pman_do --op DBclean                  >& dc.out >/dev/null
+	          windowBottom
+	          echo ""
             echo -en "\033[2A\033[2K"
             cat dc.out | sed -E 's/(.{80})/\1\n/g'                      | ./boxes.sh ${LightBlue}
         else
@@ -458,6 +498,7 @@ else
         cat dc.out                                                      | ./boxes.sh ${LightGreen}
         echo ""                                                         | ./boxes.sh
         echo "Creating superuser cubeadmin:cubeadmin1234..."            | ./boxes.sh
+        echo "This might take a few minutes... please be patient."      | ./boxes.sh ${Yellow}
         windowBottom
         docker-compose -f docker-compose_dev.yml    \
             exec chris_store /bin/bash -c            \
@@ -504,7 +545,7 @@ else
         for plugin in "${chris_store_plugins[@]}" ; do
             cparse $plugin ".py" "REPO" "CONTAINER" "MMN" "ENV"
             if [[ $REPO == "fnndsc" ]] ; then
-                printf "${Cyan}%25s${NC}<--${LightBlue}[ dockerhub ]${NC}::${LightGreen}%37s\n" \
+                printf "${Cyan}%25s${NC}<--${LightBlue}[ dockerhub ]${NC}::${LightGreen}%37s\n"\
                     "[ $CONTAINER ]" "$REPO/$CONTAINER"                 | ./boxes.sh
                 windowBottom
                 CMD="docker pull $REPO/$CONTAINER"
@@ -516,21 +557,23 @@ else
 
     title -d 1 "Automatically uploading some plugins to the ChRIS store..."
         declare -i i=1
-        echo ""                                                     | ./boxes.sh
-        echo ""                                                     | ./boxes.sh
+        declare -i b_uploadSuccess=0
+        declare -i b_uploadFail=0
+        echo ""                                                         | ./boxes.sh
+        echo ""                                                         | ./boxes.sh
         for plugin in "${chris_store_plugins[@]}"; do
             cparse $plugin ".py" "REPO" "CONTAINER" "MMN" "ENV"
             CMD="docker run --rm $REPO/$CONTAINER ${MMN} --json 2> /dev/null"
             PLUGIN_REP=$(docker run --rm $REPO/$CONTAINER ${MMN} --json 2> /dev/null)
-            # echo "$PLUGIN_REP" | python -m json.tool                    | ./boxes.sh ${LightGreen}
+            # echo "$PLUGIN_REP" | python -m json.tool                  | ./boxes.sh ${LightGreen}
             echo -en "\033[2A\033[2K"
-            printf "%8s${Cyan}%28s${NC}%5s${LightBlue}%39s\n" \
-              "${STEP}.$i: " "[ $CONTAINER ]" "--->" "[ ChRIS Store ]"   | ./boxes.sh
+            printf "%8s${Cyan}%28s${NC}%5s${LightBlue}%39s\n"           \
+              "${STEP}.$i: " "[ $CONTAINER ]" "--->" "[ ChRIS Store ]"  | ./boxes.sh
             windowBottom
 
-            docker-compose -f docker-compose_dev.yml                                \
-                exec chris_store python plugins/services/manager.py add "$CONTAINER" \
-                cubeadmin https://github.com/FNNDSC "$REPO/$CONTAINER"              \
+            docker-compose -f docker-compose_dev.yml                                    \
+                exec chris_store python plugins/services/manager.py add "$CONTAINER"    \
+                cubeadmin https://github.com/FNNDSC "$REPO/$CONTAINER"                  \
                 --descriptorstring "$PLUGIN_REP" >& dc.out >/dev/null
             status=$?
             echo -en "\033[2A\033[2K"
@@ -539,13 +582,29 @@ else
             if (( $status == 0 )) ; then
                 printf "%40s${LightGreen}%40s${NC}\n"                   \
                         "ChRIS store upload" "[ success ]"              | ./boxes.sh
+                b_uploadSuccess=$(( b_uploadSuccess+=1 ))
             else
-                printf "%40s${Yellow}%40s${NC}\n"                     \
+                printf "%40s${Yellow}%40s${NC}\n"                       \
                         "ChRIS store upload" "[ failure ]"              | ./boxes.sh
+                b_uploadFail=$(( b_uploadFail+=1 ))
             fi
             ((i++))
             windowBottom
         done
+        echo -en "\033[2A\033[2K"
+        echo ""                                                         | ./boxes.sh
+        if (( b_uploadSuccess > 0 )) ; then
+            printf "${LightCyan}%20s${LightGreen}%-60s${NC}\n"          \
+                "$b_uploadSuccess"                                      \
+                " plugin(s) successfully uploaded to ChRIS Store"       | ./boxes.sh
+        fi
+        if (( b_uploadFail > 0 )) ; then
+            printf "${Brown}%20s${Brown}%-60s${NC}\n"                   \
+                "$b_uploadFail"                                         \
+                " plugin(s) did not upload to ChRIS Store. WARNING"     | ./boxes.sh
+        fi
+        echo ""                                                         | ./boxes.sh
+        windowBottom
 
     title -d 1 "Automatically creating two unlocked pipelines in the ChRIS STORE" \
                             "(unmutable and available to all users)"
@@ -562,7 +621,7 @@ else
         PLUGIN_TREE=${STR1}${S3_PLUGIN_VER}${STR2}${SIMPLEDS_PLUGIN_VER}${STR3}
         windowBottom
         docker-compose -f docker-compose_dev.yml                        \
-            exec chris_store python pipelines/services/manager.py        \
+            exec chris_store python pipelines/services/manager.py       \
             add "${PIPELINE_NAME}" cubeadmin "${PLUGIN_TREE}" --unlock
 
         PIPELINE_NAME="simpledsapp_v${SIMPLEDS_PLUGIN_VER}-simpledsapp_v${SIMPLEDS_PLUGIN_VER}-simpledsapp_v${SIMPLEDS_PLUGIN_VER}"
@@ -576,7 +635,7 @@ else
         PLUGIN_TREE=${STR4}${SIMPLEDS_PLUGIN_VER}${STR5}${SIMPLEDS_PLUGIN_VER}${STR6}${SIMPLEDS_PLUGIN_VER}${STR7}
         windowBottom
         docker-compose -f docker-compose_dev.yml                        \
-            exec chris_store python pipelines/services/manager.py        \
+            exec chris_store python pipelines/services/manager.py       \
             add "${PIPELINE_NAME}" cubeadmin "${PLUGIN_TREE}" --unlock
         echo -en "\033[2A\033[2K"
     windowBottom
@@ -611,6 +670,8 @@ else
 
     title -d 1 "Automatically registering some plugins from the ChRIS store into CUBE..."
         declare -i i=1
+        declare -i b_registerSuccess=0
+        declare -i b_registerFail=0
         echo ""                                                     | ./boxes.sh
         echo ""                                                     | ./boxes.sh
         for plugin in "${chris_plugins[@]}"; do
@@ -627,20 +688,37 @@ else
                 add "$ENV" "http://pfcon.local:5005" --description "$ENV Description"
             docker-compose -f docker-compose_dev.yml                    \
                 exec chris_dev python plugins/services/manager.py       \
-                register $ENV --pluginname "$CONTAINER"
+                register $ENV --pluginname "$CONTAINER"  >& dc.out >/dev/null
             status=$?
             echo -en "\033[2A\033[2K"
+            cat dc.out | ./boxes.sh
 
             if (( $status == 0 )) ; then
                 printf "%40s${LightGreen}%40s${NC}\n"                   \
                     "CUBE registation" "[ success ]"                    | ./boxes.sh
+                b_registerSuccess=$(( b_registerSuccess+=1 ))
             else
-                printf "%40s${Yellow}%40s${NC}\n"                     \
+                printf "%40s${Yellow}%40s${NC}\n"                       \
                     "CUBE registration" "[ failure ]"                   | ./boxes.sh
+                b_registerFail=$(( b_registerFail+=1 ))
             fi
             ((i++))
             windowBottom
         done
+        echo -en "\033[2A\033[2K"
+        echo ""                                                         | ./boxes.sh
+        if (( b_registerSuccess )) ; then
+            printf "${LightCyan}%20s${LightGreen}%-60s${NC}\n"          \
+                "$b_registerSuccess"                                    \
+                " plugin(s) successfully registered to ChRIS"           | ./boxes.sh
+        fi
+        if (( b_registerFail )) ; then
+            printf "${Brown}%20s${Brown}%-60s${NC}\n"                   \
+                "$b_registerFail"                                       \
+                " plugin(s) did not register to ChRIS. WARNING"         | ./boxes.sh
+        fi
+        echo ""                                                         | ./boxes.sh
+        windowBottom
 
     title -d 1 "Creating two ChRIS API users"
         echo "Setting superuser chris:chris1234..."                     | ./boxes.sh
@@ -691,30 +769,78 @@ else
         cat dc.out | ./boxes.sh
    windowBottom
 
+    if (( ! b_skipIntegrationTests && ! b_pause )) ; then
+        title -d 1 "Automatic restart of satellite services pfcon/pfioh/pman to clear" \
+                   "any lingering traces of integration tests..."
+        echo "Restarting pman..."                                   | ./boxes.sh ${Yellow}
+        echo ""                                                     | ./boxes.sh
+        printf "%80s\n" "Clearing internal pman database..."        | ./boxes.sh
+        windowBottom
+        docker-compose --no-ansi -f docker-compose_dev.yml exec pman_service pman_do --op DBclean >& dc.out >/dev/null
+        docker-compose --no-ansi -f docker-compose_dev.yml restart pman_service >& dc.out > /dev/null
+        echo -en "\033[2A\033[2K"
+        cat dc.out | ./boxes.sh
+        echo "Restarting pfioh..."                                  | ./boxes.sh ${Yellow}
+        windowBottom
+        docker-compose --no-ansi -f docker-compose_dev.yml restart pfioh_service >& dc.out > /dev/null
+        echo -en "\033[2A\033[2K"
+        cat dc.out | ./boxes.sh
+        echo "Restarting pfcon..."                                  | ./boxes.sh ${Yellow}
+        windowBottom
+        docker-compose --no-ansi -f docker-compose_dev.yml restart pfcon_service >& dc.out > /dev/null
+        echo -en "\033[2A\033[2K"
+        cat dc.out | ./boxes.sh
+    fi
+
+    if (( b_pause )) ; then
+        title -d 1  "Pause for manual restart of services?"             \
+                    "Restarting services here allows for real timelogging of running system"
+        boxcenter "Note manual restart is OPTIONAL!"                            ${Yellow}
+        boxcenter ""
+        boxcenter "┌────────┐"                                                  ${Red}
+        boxcenter "│  STOP  │"                                                  ${Red}
+        boxcenter "└────────┘"                                                  ${Red}
+        boxcenter "If you have already done a manual restart for integration"   ${Red}
+        boxcenter "test logging, you MUST abort this instance and restart   "   ${Red}
+        boxcenter "CUBE. Make sure that you DO NOT perform a manual restart "   ${Red}
+        boxcenter "of services at the integration tests.                    "   ${Red}
+        boxcenter ""
+        boxcenter "If you don't want to enable better realtime logging,"
+        boxcenter "simply ignore this and hit *ANY* key to  continue..."
+        boxcenter ""
+        boxcenter "To log the 'worker' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r worker"                                  ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pfcon' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pfcon_service"                           ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pfioh' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pfioh_service"                           ${LightCyan}
+        boxcenter ""
+        boxcenter "To log 'pman' in realtime, in a separate terminal, do..."
+        boxcenter "./make.sh -s -r pman_service"                            ${LightCyan}
+        boxcenter ""
+        boxcenter "NOTE: Restart services in this order:"                   ${LightGreen}
+        boxcenter "worker, pfcon, pfioh, pman"                              ${LightGreen}
+        boxcenter ""
+        boxcenter "Pausing... hit *ANY* key to continue"                    ${Yellow}
+        windowBottom
+        old_stty_cfg=$(stty -g)
+        stty raw -echo ; REPLY=$(head -c 1) ; stty $old_stty_cfg
+        echo -en "\033[2A\033[2K"
+        boxcenter "Resuming..."
+    fi
+    windowBottom
+
     if (( !  b_norestartinteractive_chris_dev )) ; then
         title -d 1 "Restarting CUBE's Django development server"        \
                             "in interactive mode..."
-            printf "${LightCyan}%40s${LightGreen}%40s\n"                \
-                        "Stopping" "pman_service"                       | ./boxes.sh
-            windowBottom
-            docker-compose --no-ansi -f docker-compose_dev.yml stop pman_service >& dc.out > /dev/null
-            echo -en "\033[2A\033[2K"
-            cat dc.out | ./boxes.sh
-
-            printf "${LightCyan}%40s${LightGreen}%40s\n"                \
-                        "rm -f" "pman_service"                          | ./boxes.sh
-            windowBottom
-            docker-compose --no-ansi -f docker-compose_dev.yml rm -f pman_service >& dc.out > /dev/null
-            echo -en "\033[2A\033[2K"
-            cat dc.out | ./boxes.sh
-
             printf "${LightCyan}%40s${LightGreen}%40s\n"                \
                         "Stopping" "chris_dev"                          | ./boxes.sh
             windowBottom
             docker-compose --no-ansi -f docker-compose_dev.yml stop chris_dev >& dc.out >/dev/null
             echo -en "\033[2A\033[2K"
             cat dc.out | ./boxes.sh
-
 
             printf "${LightCyan}%40s${LightGreen}%40s\n"                \
                         "rm -f" "chris_dev"                             | ./boxes.sh

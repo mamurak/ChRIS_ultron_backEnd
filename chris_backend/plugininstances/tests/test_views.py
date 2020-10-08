@@ -18,7 +18,7 @@ from core.celery import task_routes
 from core.swiftmanager import SwiftManager
 from plugins.models import PluginMeta, Plugin, PluginParameter, ComputeResource
 from plugininstances.models import PluginInstance, PluginInstanceFile
-from plugininstances.models import PathParameter, FloatParameter, STATUS_TYPES
+from plugininstances.models import PathParameter, FloatParameter
 from plugininstances.services.manager import PluginInstanceManager
 from plugininstances import views
 
@@ -78,7 +78,7 @@ class TasksViewTests(TransactionTestCase):
         # that is exclusively used for the automated tests
         celery_app.conf.update(task_routes=None)
         cls.celery_worker = start_worker(celery_app,
-                                         concurrency=2,
+                                         concurrency=1,
                                          perform_ping_check=False)
         cls.celery_worker.__enter__()
 
@@ -110,8 +110,8 @@ class TasksViewTests(TransactionTestCase):
                                  password=self.chris_password)
         User.objects.create_user(username=self.other_username,
                                  password=self.other_password)
-        User.objects.create_user(username=self.username,
-                                 password=self.password)
+        user = User.objects.create_user(username=self.username,
+                                        password=self.password)
 
         # create two plugins
         (pl_meta, tf) = PluginMeta.objects.get_or_create(name='pacspull', type='fs')
@@ -123,6 +123,16 @@ class TasksViewTests(TransactionTestCase):
         (plugin_ds, tf) = Plugin.objects.get_or_create(meta=pl_meta, version='0.1')
         plugin_ds.compute_resources.set([self.compute_resource])
         plugin_ds.save()
+
+        # create pacspull fs plugin instance
+        (self.pl_inst, tf) = PluginInstance.objects.get_or_create(
+            plugin=plugin_fs, owner=user,
+            compute_resource=plugin_fs.compute_resources.all()[0])
+
+        # create mri_convert ds plugin instance
+        PluginInstance.objects.get_or_create(
+            plugin=plugin_ds, owner=user, previous=self.pl_inst,
+            compute_resource=plugin_ds.compute_resources.all()[0])
 
 
 class PluginInstanceListViewTests(TasksViewTests):
@@ -136,15 +146,19 @@ class PluginInstanceListViewTests(TasksViewTests):
         self.create_read_url = reverse("plugininstance-list", kwargs={"pk": plugin.id})
         self.user_space_path = '%s/uploads/' % self.username
         self.post = json.dumps(
-            {"template": {"data": [{"name": "dir", "value": self.user_space_path}]}})
+            {"template": {"data": [{"name": "dir", "value": self.user_space_path},
+                                   {"name": "title", "value": 'test1'}]}})
 
     def test_plugin_instance_create_success(self):
+        # add parameters to the plugin before the POST request
+        plugin = Plugin.objects.get(meta__name="pacspull")
+        PluginParameter.objects.get_or_create(plugin=plugin, name='dir', type='string',
+                                              optional=False)
+
+        # first test 'fs' plugin instance (has no previous plugin instance)
+
         with mock.patch.object(views.run_plugin_instance, 'delay',
                                return_value=None) as delay_mock:
-            # add parameters to the plugin before the POST request
-            plugin = Plugin.objects.get(meta__name="pacspull")
-            PluginParameter.objects.get_or_create(plugin=plugin, name='dir', type='string',
-                                                  optional=False)
             # make API request
             self.client.login(username=self.username, password=self.password)
             response = self.client.post(self.create_read_url, data=self.post,
@@ -152,8 +166,55 @@ class PluginInstanceListViewTests(TasksViewTests):
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
             # check that the run_plugin_instance task was called with appropriate args
-            parameters_dict = {'dir': self.user_space_path}
-            delay_mock.assert_called_with(response.data['id'], parameters_dict)
+            delay_mock.assert_called_with(response.data['id'])
+            self.assertEqual(response.data['status'], 'scheduled')
+
+        # now test 'ds' plugin instance (has previous plugin instance)
+
+        previous_plg_inst = PluginInstance.objects.get(title='test1')
+        plugin = Plugin.objects.get(meta__name="mri_convert")
+        create_read_url = reverse("plugininstance-list", kwargs={"pk": plugin.id})
+        post = json.dumps(
+            {"template": {"data": [{"name": "previous_id", "value": previous_plg_inst.id}]}})
+
+        previous_plg_inst.status = 'finishedSuccessfully'
+        previous_plg_inst.save()
+        with mock.patch.object(views.run_plugin_instance, 'delay',
+                               return_value=None) as delay_mock:
+            self.client.login(username=self.username, password=self.password)
+            response = self.client.post(create_read_url, data=post,
+                                        content_type=self.content_type)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+            # check that the run_plugin_instance task was called with appropriate args
+            delay_mock.assert_called_with(response.data['id'])
+            self.assertEqual(response.data['status'], 'scheduled')
+
+        previous_plg_inst.status = 'started'
+        previous_plg_inst.save()
+        with mock.patch.object(views.run_plugin_instance, 'delay',
+                               return_value=None) as delay_mock:
+            self.client.login(username=self.username, password=self.password)
+            response = self.client.post(create_read_url, data=post,
+                                        content_type=self.content_type)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+            # check that the run_plugin_instance task was not called
+            delay_mock.assert_not_called()
+            self.assertEqual(response.data['status'], 'waitingForPrevious')
+
+        previous_plg_inst.status = 'finishedWithError'
+        previous_plg_inst.save()
+        with mock.patch.object(views.run_plugin_instance, 'delay',
+                               return_value=None) as delay_mock:
+            self.client.login(username=self.username, password=self.password)
+            response = self.client.post(create_read_url, data=post,
+                                        content_type=self.content_type)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+            # check that the run_plugin_instance task was not called
+            delay_mock.assert_not_called()
+            self.assertEqual(response.data['status'], 'cancelled')
 
     @tag('integration')
     def test_integration_plugin_instance_create_success(self):
@@ -207,9 +268,9 @@ class PluginInstanceListViewTests(TasksViewTests):
                                           content_type='text/plain')
 
         # make POST API request to create a plugin instance
-        self.create_read_url = reverse("plugininstance-list", kwargs={"pk": plugin.id})
+        create_read_url = reverse("plugininstance-list", kwargs={"pk": plugin.id})
         self.client.login(username=self.username, password=self.password)
-        response = self.client.post(self.create_read_url, data=self.post,
+        response = self.client.post(create_read_url, data=self.post,
                                     content_type=self.content_type)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -222,11 +283,6 @@ class PluginInstanceListViewTests(TasksViewTests):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_plugin_instance_list_success(self):
-        # create a pacspull plugin instance
-        plugin = Plugin.objects.get(meta__name="pacspull")
-        user = User.objects.get(username=self.username)
-        PluginInstance.objects.get_or_create(
-            plugin=plugin, owner=user, compute_resource=plugin.compute_resources.all()[0])
         self.client.login(username=self.username, password=self.password)
         response = self.client.get(self.create_read_url)
         self.assertContains(response, "pacspull")
@@ -243,27 +299,21 @@ class PluginInstanceDetailViewTests(TasksViewTests):
 
     def setUp(self):
         super(PluginInstanceDetailViewTests, self).setUp()
-        # create a pacspull plugin instance
-        plugin = Plugin.objects.get(meta__name="pacspull")
-        user = User.objects.get(username=self.username)
-        (self.pl_inst, tf) = PluginInstance.objects.get_or_create(
-            plugin=plugin, owner=user, compute_resource=plugin.compute_resources.all()[0])
-        plugin = Plugin.objects.get(meta__name="mri_convert")
-        PluginInstance.objects.get_or_create(
-            plugin=plugin, owner=user, previous=self.pl_inst,
-            compute_resource=plugin.compute_resources.all()[0])
+
         self.read_update_delete_url = reverse("plugininstance-detail",
                                               kwargs={"pk": self.pl_inst.id})
 
     def test_plugin_instance_detail_success(self):
+        self.pl_inst.status = 'started'
+        self.pl_inst.save()
         with mock.patch.object(views.check_plugin_instance_exec_status, 'delay',
                                return_value=None) as delay_mock:
             # make API request
             self.client.login(username=self.username, password=self.password)
             response = self.client.get(self.read_update_delete_url)
             self.assertContains(response, "pacspull")
-
-            # check that the check_plugin_instance_exec_status task was called once
+            self.assertEqual(response.data['status'], 'started')
+            # check that the check_plugin_instance_exec_status task was called with appropriate args
             delay_mock.assert_called_with(self.pl_inst.id)
 
     @tag('integration', 'error-pman')
@@ -321,19 +371,22 @@ class PluginInstanceDetailViewTests(TasksViewTests):
         # create a plugin's instance
         user = User.objects.get(username=self.username)
         (pl_inst, tf) = PluginInstance.objects.get_or_create(
-            plugin=plugin, owner=user, compute_resource=plugin.compute_resources.all()[0])
+            title='test2', plugin=plugin,
+            owner=user, compute_resource=plugin.compute_resources.all()[0])
+        pl_inst.status = 'scheduled'
+        pl_inst.save()
         PathParameter.objects.get_or_create(plugin_inst=pl_inst, plugin_param=pl_param,
                                             value=user_space_path)
-        self.read_update_delete_url = reverse("plugininstance-detail",
-                                              kwargs={"pk": pl_inst.id})
+        read_update_delete_url = reverse("plugininstance-detail",
+                                         kwargs={"pk": pl_inst.id})
 
         # run the plugin instance
         plg_inst_manager = PluginInstanceManager(pl_inst)
-        plg_inst_manager.run_plugin_instance_app({'dir': user_space_path})
+        plg_inst_manager.run_plugin_instance_app()
 
         # make API GET request
         self.client.login(username=self.username, password=self.password)
-        response = self.client.get(self.read_update_delete_url)
+        response = self.client.get(read_update_delete_url)
         self.assertContains(response, "simplefsapp")
         self.assertContains(response, 'started')
 
@@ -345,7 +398,7 @@ class PluginInstanceDetailViewTests(TasksViewTests):
         b_checkAgain = True
         time.sleep(10)
         while b_checkAgain:
-            response = self.client.get(self.read_update_delete_url)
+            response = self.client.get(read_update_delete_url)
             str_responseStatus = response.data['status']
             if str_responseStatus == 'finishedSuccessfully':
                 b_checkAgain = False
@@ -358,9 +411,9 @@ class PluginInstanceDetailViewTests(TasksViewTests):
 
         # delete files from swift storage
         self.swift_manager.delete_obj(user_space_path + 'test.txt')
-        obj_paths = self.swift_manager.ls(pl_inst.get_output_path())
-        for path in obj_paths:
-            self.swift_manager.delete_obj(path)
+        # obj_paths = self.swift_manager.ls(pl_inst.get_output_path())
+        # for path in obj_paths:
+        #     self.swift_manager.delete_obj(path)
 
     def test_plugin_instance_detail_failure_unauthenticated(self):
         response = self.client.get(self.read_update_delete_url)
@@ -377,11 +430,17 @@ class PluginInstanceDetailViewTests(TasksViewTests):
         self.assertContains(response, "Test instance")
         self.assertContains(response, "cancelled")
 
-    def test_plugin_instance_update_failure_cannot_update_status_if_current_status_is_not_started_or_cancelled(self):
+    def test_plugin_instance_update_failure_current_status_is_finishedSuccessfully_or_finishedWithError(self):
         put = json.dumps({
             "template": {"data": [{"name": "status", "value": "cancelled"}]}})
 
         self.pl_inst.status = 'finishedSuccessfully'
+        self.pl_inst.save()
+        self.client.login(username=self.username, password=self.password)
+        response = self.client.put(self.read_update_delete_url, data=put,
+                                   content_type=self.content_type)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.pl_inst.status = 'finishedWithError'
         self.pl_inst.save()
         self.client.login(username=self.username, password=self.password)
         response = self.client.put(self.read_update_delete_url, data=put,
@@ -441,24 +500,23 @@ class PluginInstanceListQuerySearchViewTests(ViewTests):
         plugin = Plugin.objects.get(meta__name="pacspull")
         (inst, tf) = PluginInstance.objects.get_or_create(
             plugin=plugin, owner=user, compute_resource=plugin.compute_resources.all()[0])
-        # set first instance's status
-        inst.status = STATUS_TYPES[0]
+
         plugin = Plugin.objects.get(meta__name="mri_convert")
         (inst, tf) = PluginInstance.objects.get_or_create(
             plugin=plugin, owner=user, previous=inst,
             compute_resource=plugin.compute_resources.all()[0])
         # set second instance's status
-        inst.status = STATUS_TYPES[2]
+        inst.status = 'finishedSuccessfully'
+        inst.save()
 
-        self.list_url = reverse("allplugininstance-list-query-search") + '?status=' + \
-                        STATUS_TYPES[0]
+        self.list_url = reverse("allplugininstance-list-query-search") + '?status=created'
 
     def test_plugin_instance_query_search_list_success(self):
         self.client.login(username=self.username, password=self.password)
         response = self.client.get(self.list_url)
         # response should only contain the instances that match the query
-        self.assertContains(response, STATUS_TYPES[0])
-        self.assertNotContains(response, STATUS_TYPES[1])
+        self.assertContains(response, 'created')
+        self.assertNotContains(response,'finishedSuccessfully')
 
     def test_plugin_instance_query_search_list_failure_unauthenticated(self):
         response = self.client.get(self.list_url)
