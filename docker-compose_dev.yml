@@ -38,11 +38,20 @@ services:
     volumes:
       - ./chris_backend:/home/localuser/chris_backend:z
     entrypoint: ''
-    command: celery -A core worker -c 1 -l DEBUG -Q main
+    command: celery -A core worker -l DEBUG -Q main
     environment:
       - CELERY_RDB_HOST=0.0.0.0
     ports:
       - "6900:6900"
+      - "6901:6901"
+      - "6902:6902"
+      - "6903:6903"
+      - "6904:6904"
+      - "6905:6905"
+      - "6906:6906"
+      - "6907:6907"
+      - "7901:7901"
+      - "7902:7902"
     depends_on:
       - chris_dev_db
       - swift_service
@@ -53,6 +62,24 @@ services:
     labels:
       name: "ChRIS_ultron_backEnd Asynchronous Worker"
       role: "Backend development async worker"
+
+  scheduler:
+    image: ${CHRISREPO}/chris:dev
+    volumes:
+      - ./chris_backend:/home/localuser/chris_backend:z
+    entrypoint: ''
+    command: celery -A core beat -l info --pidfile /home/localuser/celerybeat.pid --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      - chris_dev_db
+      - swift_service
+      - queue
+    # restart until Django DB migrations are ready
+    restart: on-failure
+    networks:
+      - local
+    labels:
+      name: "ChRIS_ultron_backEnd Periodic Tasks Scheduler"
+      role: "Backend development periodic tasks scheduler"
 
   chris_dev_db:
     image: mysql:5
@@ -142,6 +169,10 @@ services:
   pfcon_service:
     image: ${PFCONREPO}/pfcon${TAG}
     command: ["--forever", "--httpResponse", "--verbosity", "1"]
+    # volumes:
+    #   - ../../forks/pfcon/pfcon/pfcon.py:/usr/local/lib/python3.8/dist-packages/pfcon/pfcon.py
+    #   - ../../forks/pfurl/pfurl/pfurl.py:/usr/local/lib/python3.8/dist-packages/pfurl/pfurl.py
+    #   - ../../forks/pfcon/pfcon/swiftmanager.py:/usr/local/lib/python3.8/dist-packages/pfcon/swiftmanager.py
     ports:
       - "5005:5005"
     depends_on:
@@ -157,9 +188,8 @@ services:
       role: "pfcon service"
 
   pfioh_service:
-    # The following is a bit complicated... Basically we need to map a physical dir
-    # in the HOST to the key store in pfioh. The keystore is specified by the
-    # --storeBase flag.
+    # We need to map a physical dir in the HOST to the key store in pfioh.
+    # The keystore is specified by the --storeBase flag.
     image: ${PFIOHREPO}/pfioh${TAG}
     command: ["--forever", "--httpResponse", "--createDirsAsNeeded", "--storeBase", "/hostFS/storeBase", "--verbosity", "1"]
     volumes:
