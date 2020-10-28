@@ -6,13 +6,13 @@
 #
 # SYNOPSIS
 #
-#       cparse.sh <cstring> <extension> "REPO" "CONTAINER" "MMN" "ENV"
+#       cparse.sh <cstring> "REPO" "CONTAINER" "MMN" "ENV"
 #
 # DESCRIPTION
 #
 #       cparse.sh parses a <cstring> of pattern:
 #
-#               [<repo>/]<container>[::<mainModuleName>[^<env>]]
+#               [<repo>/]<container>[::<mainModuleName>[%<extension>[^<env>]]]
 #
 #       and returns
 #
@@ -24,10 +24,6 @@
 #
 #       The container name string to parse.
 #
-# <extension>
-#
-#       An extension to append to the <mainModuleName>. Since most
-#       ChRIS plugins are python modules, this usually is just ".py".
 #
 # RETURN
 #
@@ -39,15 +35,18 @@
 #       the <container> part of the string.
 #
 # MMN
-#       if not passed, defaults to the <container> string, with
-#       ".py" appended and sans a possibly leading "pl-".
+#       if not passed, defaults to the <container> string
+#
+# EXT
+#       if not passed, defaults to empty.
 #
 # ENV
 #       if not passed, defaults to "host", else <env>.
 #
 # EXAMPLE
 #
-#       cparse.sh "local/pl-dircopy::directoryCopy^moc" ".py"
+#       source cparse.sh
+#       cparse_do "local/pl-dircopy::directoryCopy:%.py^moc"
 #
 
 
@@ -55,12 +54,11 @@ CREPO=fnndsc
 
 function cparse {
         pluginSpec=$1
-        pluginExt=$2
 
-        local __repo=$3
-        local __container=$4
-        local __mainModuleName=$5
-        local __env=$6
+        local __repo=$2
+        local __container=$3
+        local __mainModuleName=$4
+        local __env=$5
 
         export pluginSpec=$pluginSpec
         export CREPO=$CREPO
@@ -95,7 +93,18 @@ else:
         str_env         = l_spec[1]
         str_remain      = l_spec[0]
 
-# [:<mainModuleName]
+# [:<extension]
+l_spec          = str_remain.split('%')
+if len(l_spec) == 1:
+        # No trailing [%<extension>]
+        str_extension   = ""
+        str_remain      = l_spec[0]
+else:
+        # There is a trailing [%<extension>]
+        str_extension   = l_spec[1]
+        str_remain      = l_spec[0]
+
+# [::<mainModuleName]
 l_spec          = str_remain.split('::')
 if len(l_spec) == 1:
         # No trailing [::<mainModuleName>]
@@ -110,16 +119,19 @@ else:
         str_mmn         = l_spec[1]
         str_remain      = l_spec[0]
 
+
+
 str_container           = str_remain
 
-print("%s %s %s %s" % (str_repo, str_container, str_mmn, str_env))
+print("%s %s %s%s %s" % (str_repo, str_container, str_mmn, str_extension, str_env))
 
 EOF
 )
-        str_repo=$(echo $l_parse | awk '{print $1}')
-        str_container=$(echo $l_parse | awk '{print $2}')
-        str_mmn=$(echo $l_parse | awk '{print $3}')$pluginExt
-        str_env=$(echo $l_parse | awk '{print $4}')
+        str_repo=$(         echo $l_parse | awk '{print $1}'    )
+        str_container=$(    echo $l_parse | awk '{print $2}'    )
+        str_mmn=$(          echo $l_parse | awk '{print $3}'    )
+        str_env=$(          echo $l_parse | awk '{print $4}'    )
+
         eval $__repo="'$str_repo'"
         eval $__container="'$str_container'"
         eval $__mainModuleName="'$str_mmn'"
@@ -128,9 +140,9 @@ EOF
 }
 
 function cparse_do {
-        TESTNAME="local/pl-dircopy:directoryCopy^moc"
+        TESTNAME="local/pl-dircopy::directoryCopy%.py^moc"
 
-        cparse "$1" "$2" "REPO" "CONTAINER" "MMN" "ENV"
+        cparse "$1" "REPO" "CONTAINER" "MMN" "ENV"
 
         echo $REPO
         echo $CONTAINER
