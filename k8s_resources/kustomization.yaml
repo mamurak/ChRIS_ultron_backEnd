@@ -19,3 +19,4 @@ resources:
 - pfioh-service.yaml
 - pman-deployment.yaml
 - pman-service.yaml
+- scheduler-deployment.yaml
