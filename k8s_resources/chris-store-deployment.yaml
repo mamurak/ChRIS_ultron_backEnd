@@ -28,6 +28,8 @@ spec:
           value: "true"
         - name: DJANGO_CORS_ORIGIN_WHITELIST
           value: "babymri.org"
+        - name: DJANGO_USE_X_FORWARDED_HOST
+          value: "false"
         - name: DATABASE_HOST
           value: chris-store-db
         - name: DATABASE_PORT
