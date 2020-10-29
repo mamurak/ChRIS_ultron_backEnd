@@ -3,8 +3,10 @@ kind: Kustomization
 configMapGenerator:
 - name: cube-config
   env: configs/cube.env
-- name: swift-service-config
-  env: configs/swift-service.env
+
+secretGenerator:
+- name: cube-secrets
+  env: configs/secrets.env
 
 resources:
 - resources/rabbitmq-deployment.yaml

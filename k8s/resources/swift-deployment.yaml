@@ -18,5 +18,5 @@ spec:
         ports:
         - containerPort: 8080
         envFrom:
-        - configMapRef:
-            name: swift-service-config
+        - secretRef:
+            name: cube-secrets
