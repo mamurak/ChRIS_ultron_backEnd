@@ -17,8 +17,8 @@ spec:
         image: mmurakam/chris:3 #fnndsc/chris
         ports:
         - containerPort: 6900
-        env:
-        - name: CELERY_RDB_HOST
-          value: "0.0.0.0"
+        envFrom:
+        - configMapRef:
+            name: worker-config
         command: ["celery"]
         args: ["-A", "core", "worker", "-c", "1", "-l", "DEBUG", "-Q", "main"]

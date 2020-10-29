@@ -17,8 +17,6 @@ spec:
         image: fnndsc/docker-swift-onlyone:latest
         ports:
         - containerPort: 8080
-        env:
-        - name: SWIFT_USERNAME
-          value: "chris:chris1234"
-        - name: SWIFT_KEY
-          value: "testing"
+        envFrom:
+        - configMapRef:
+            name: swift-service-config
