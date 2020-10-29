@@ -1,16 +1,10 @@
 kind: Kustomization
 
 configMapGenerator:
-- name: chris-store-config
-  env: configs/chris-store.env
-- name: chris-db-config
-  env: configs/chris-db.env
-- name: chris-store-db-config
-  env: configs/chris-store-db.env
+- name: cube-config
+  env: configs/cube.env
 - name: swift-service-config
   env: configs/swift-service.env
-- name: worker-config
-  env: configs/worker.env
 
 resources:
 - resources/rabbitmq-deployment.yaml

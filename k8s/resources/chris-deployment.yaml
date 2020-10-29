@@ -17,5 +17,6 @@ spec:
         image: fnndsc/chris:latest
         ports:
         - containerPort: 8000
-        env:
-        - name: CHRIS_DEBUG_QUIET
+        envFrom:
+        - configMapRef:
+            name: cube-config

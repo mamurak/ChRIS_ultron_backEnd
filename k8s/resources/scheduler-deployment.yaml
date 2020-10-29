@@ -14,6 +14,9 @@ spec:
     spec:
       containers:
       - name: scheduler
-        image: mmurakam/chris:3 #fnndsc/chris:latest
+        image: fnndsc/chris:latest
         command: ["celery"]
         args: ["-A", "core", "beat", "-l", "info", "--pidfile", "/home/localuser/celerybeat.pid", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+        envFrom:
+        - configMapRef:
+            name: cube-config

@@ -19,4 +19,4 @@ spec:
         - containerPort: 5672
         envFrom:
         - configMapRef:
-            name: chris-store-db-config
+            name: cube-config

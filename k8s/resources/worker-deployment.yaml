@@ -14,11 +14,11 @@ spec:
     spec:
       containers:
       - name: worker
-        image: mmurakam/chris:3 #fnndsc/chris
+        image: fnndsc/chris
         ports:
         - containerPort: 6900
         envFrom:
         - configMapRef:
-            name: worker-config
+            name: cube-config
         command: ["celery"]
         args: ["-A", "core", "worker", "-c", "1", "-l", "DEBUG", "-Q", "main"]

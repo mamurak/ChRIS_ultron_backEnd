@@ -19,4 +19,4 @@ spec:
         - containerPort: 8010
         envFrom:
         - configMapRef:
-            name: chris-store-config
+            name: cube-config

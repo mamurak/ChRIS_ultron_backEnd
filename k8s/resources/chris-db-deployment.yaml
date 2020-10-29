@@ -19,4 +19,4 @@ spec:
         - containerPort: 3306
         envFrom:
         - configMapRef:
-            name: chris-db-config
+            name: cube-config
